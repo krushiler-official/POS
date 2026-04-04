@@ -194,7 +194,7 @@ export default function Signup() {
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Full Name</label>
                   <input type="text" value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    className="input-field" placeholder="John Doe" required />
+                    className="input-field" placeholder="Your full name" required />
                 </div>
 
                 {/* ── Username ── */}
@@ -202,7 +202,7 @@ export default function Signup() {
                   <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Username</label>
                   <input type="text" value={form.username}
                     onChange={(e) => setForm({ ...form, username: e.target.value })}
-                    className="input-field" placeholder="johndoe" required />
+                    className="input-field" placeholder="Choose a username" required />
                 </div>
 
                 {/* ── Password ── */}
@@ -211,7 +211,7 @@ export default function Signup() {
                   <div className="relative">
                     <input type={showPass ? 'text' : 'password'} value={form.password}
                       onChange={(e) => setForm({ ...form, password: e.target.value })}
-                      className="input-field pr-11" placeholder="Min. 6 characters" required minLength={6} />
+                      className="input-field pr-11" placeholder="Create a password" required minLength={6} />
                     <button type="button" onClick={() => setShowPass(!showPass)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                       {showPass ? <EyeOff size={15} /> : <Eye size={15} />}

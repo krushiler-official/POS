@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Coffee, ArrowRight, Zap } from 'lucide-react'
+import { Eye, EyeOff, Coffee, ArrowRight, Zap, ShieldCheck, Users } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -17,10 +17,20 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await login(form.username, form.password)
-      navigate('/dashboard')
-    } catch {
-      setError('Invalid username or password. Please try again.')
+      const user = await login(form.username, form.password)
+      // Route based on role from database
+      if (user.role === 'admin') {
+        navigate('/admin/dashboard')
+      } else {
+        navigate('/staff/tables')
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail
+      if (msg === 'Invalid credentials') {
+        setError('Username or password is incorrect.')
+      } else {
+        setError('Something went wrong. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -28,13 +38,13 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex" style={{ background: '#0f1117' }}>
-      {/* Left branding panel */}
+
+      {/* ── Left branding panel ── */}
       <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden"
         style={{ background: 'linear-gradient(135deg, #1c2333 0%, #0f1117 100%)' }}>
         <div className="absolute inset-0" style={{
           backgroundImage: 'radial-gradient(ellipse at 30% 20%, rgba(249,115,22,0.15) 0%, transparent 60%), radial-gradient(ellipse at 70% 80%, rgba(249,115,22,0.08) 0%, transparent 60%)'
         }} />
-        {/* Grid pattern */}
         <div className="absolute inset-0 opacity-[0.03]"
           style={{ backgroundImage: 'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
 
@@ -72,10 +82,12 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right form panel */}
+      {/* ── Right form panel ── */}
       <div className="flex-1 flex items-center justify-center p-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
           className="w-full max-w-sm">
+
+          {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
             <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
               <Coffee size={16} className="text-white" />
@@ -84,9 +96,10 @@ export default function Login() {
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-1">Welcome back</h2>
-          <p className="text-gray-500 text-sm mb-8">Sign in to your account to continue</p>
+          <p className="text-gray-500 text-sm mb-8">Sign in with your registered account</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Error */}
             {error && (
               <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
                 className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-xl">
@@ -105,6 +118,7 @@ export default function Login() {
                 placeholder="Enter your username"
                 required
                 autoFocus
+                autoComplete="username"
               />
             </div>
 
@@ -118,6 +132,7 @@ export default function Login() {
                   className="input-field pr-11"
                   placeholder="Enter your password"
                   required
+                  autoComplete="current-password"
                 />
                 <button type="button" onClick={() => setShowPass(!showPass)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
@@ -143,7 +158,28 @@ export default function Login() {
             </motion.button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
+          {/* Role info — no hardcoded credentials, just explains the two roles */}
+          <div className="mt-6 space-y-2">
+            <p className="text-xs text-gray-600 text-center mb-3">Your dashboard is determined by your account role</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-2 border border-surface-border">
+                <ShieldCheck size={13} className="text-purple-400 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-white">Admin</p>
+                  <p className="text-[10px] text-gray-500">Full management</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-2 border border-surface-border">
+                <Users size={13} className="text-brand shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-white">Staff</p>
+                  <p className="text-[10px] text-gray-500">Orders & payments</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-center text-sm text-gray-500 mt-5">
             Don't have an account?{' '}
             <Link to="/signup" className="text-brand hover:text-brand-light font-medium transition-colors">
               Create one

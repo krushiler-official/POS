@@ -1,12 +1,16 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState } from 'react'
 import api from '../services/api'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const u = localStorage.getItem('user')
-    return u ? JSON.parse(u) : null
+    try {
+      const u = localStorage.getItem('user')
+      return u ? JSON.parse(u) : null
+    } catch {
+      return null
+    }
   })
 
   const login = async (username, password) => {
@@ -14,11 +18,13 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', data.access_token)
     localStorage.setItem('user', JSON.stringify(data.user))
     setUser(data.user)
+    // Return user so caller can route based on role from DB
     return data.user
   }
 
   const logout = () => {
-    localStorage.clear()
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
     setUser(null)
   }
 
