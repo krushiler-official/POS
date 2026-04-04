@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import connect_db, close_db
-from app.routes import auth, tables, products, orders, kitchen
+from app.routes import auth, tables, products, orders, kitchen, analytics
 from app.websockets.manager import manager
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ app.include_router(tables.router)
 app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(kitchen.router)
+app.include_router(analytics.router)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
