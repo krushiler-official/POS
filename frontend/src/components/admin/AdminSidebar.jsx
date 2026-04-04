@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, UtensilsCrossed, Package,
-  ShoppingBag, BarChart3, LogOut, Coffee,
+  ShoppingBag, BarChart3, LogOut, Users,
   ChevronLeft, ChevronRight, Shield
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
@@ -14,6 +14,7 @@ const links = [
   { to: '/admin/products', icon: Package, label: 'Products' },
   { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
   { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
+  { to: '/admin/staff', icon: Users, label: 'Staff' },
 ]
 
 export default function AdminSidebar() {

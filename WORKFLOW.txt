@@ -1,0 +1,437 @@
+================================================================
+           CAFEPOS SYSTEM - COMPLETE WORKFLOW DOCUMENT
+================================================================
+Stack: FastAPI (Python) + MongoDB + React (Vite) + Tailwind CSS
+================================================================
+
+
+----------------------------------------------------------------
+1. PROJECT STRUCTURE
+----------------------------------------------------------------
+
+BACKEND  (runs on http://localhost:8000)
+-----------------------------------------
+backend/
+  app/
+    core/
+      config.py       → loads .env settings (MONGO_URL, SECRET_KEY, etc.)
+      database.py     → MongoDB async connection using Motor
+      utils.py        → doc() converts MongoDB _id to string id
+                        to_oid() converts string to ObjectId
+
+    models/           → Python enums (not DB schemas, just type definitions)
+      user.py         → UserRole: admin | staff
+      order.py        → OrderStatus: pending | preparing | completed | paid
+                        PaymentMethod: cash | upi
+      table.py        → TableStatus: available | occupied
+      product.py      → (placeholder, fields in schemas)
+
+    schemas/          → Pydantic models for request/response validation
+      user.py         → UserCreate, UserOut, Token, LoginRequest
+      order.py        → OrderCreate, OrderOut, OrderStatusUpdate, OrderPayment
+      order_item.py   → OrderItemCreate, OrderItemOut
+      product.py      → ProductCreate, ProductUpdate, ProductOut
+      table.py        → TableCreate, TableUpdate, TableOut
+
+    routes/           → FastAPI route handlers (API endpoints)
+      auth.py         → /auth/register, /auth/login
+                        also exports get_current_user() dependency
+      orders.py       → /orders/ CRUD + status update + payment
+      kitchen.py      → /kitchen/orders, /kitchen/dashboard
+      products.py     → /products/ CRUD
+      tables.py       → /tables/ CRUD
+      analytics.py    → /analytics/overview, /daily-revenue, /top-products, /staff
+
+    services/
+      order_service.py → create_order_with_items() - validates products,
+                         calculates total, inserts order into MongoDB
+
+    websockets/
+      manager.py      → ConnectionManager class
+                        - active_connections[]  → for /ws (StaffKitchen)
+                        - order_connections[]   → for /ws/orders (KDS + CDS)
+                        - broadcast()           → sends to /ws clients
+                        - broadcast_order()     → sends to /ws/orders clients
+
+    main.py           → FastAPI app entry point
+                        - CORS middleware
+                        - includes all routers
+                        - /ws WebSocket endpoint
+                        - /ws/orders WebSocket endpoint
+
+
+FRONTEND  (runs on http://localhost:5173)
+------------------------------------------
+frontend/src/
+  services/
+    api.js            → Axios instance (baseURL: localhost:8000)
+                        auto-attaches JWT token from localStorage
+                        redirects to /login on 401
+    socket.js         → OrderSocket singleton class
+                        connects to ws://localhost:8000/ws/orders
+                        auto-reconnects every 3 seconds on disconnect
+                        pub/sub: subscribe(fn) returns unsubscribe fn
+
+  hooks/
+    useSocket.js      → React hook for /ws (used by StaffKitchen)
+                        auto-reconnects every 3 seconds
+
+  context/
+    AuthContext.jsx   → Stores logged-in user in state + localStorage
+                        Provides: user, login(), logout()
+    OrderContext.jsx  → Stores cart items + selected table in state
+                        Provides: cart, addToCart(), removeFromCart(),
+                                  updateQuantity(), clearCart(), cartTotal
+
+  components/
+    admin/
+      AdminLayout.jsx   → Wrapper with AdminNavbar + AdminSidebar
+      AdminNavbar.jsx   → Top bar for admin pages
+      AdminSidebar.jsx  → Left nav for admin pages
+    staff/
+      StaffLayout.jsx   → Wrapper with staff navigation
+    common/
+      Button.jsx        → Reusable button component
+      Card.jsx          → Reusable card component
+      Modal.jsx         → Reusable modal/dialog
+      Skeleton.jsx      → Loading placeholder
+    Order/
+      Cart.jsx          → Cart sidebar with items + checkout button
+      ProductList.jsx   → Grid of product cards
+      OrderSummary.jsx  → Order summary display
+    Table/
+      TableCard.jsx     → Single table card (shows status)
+      TableGrid.jsx     → Grid of table cards
+
+  pages/
+    Login.jsx           → Login form → POST /auth/login
+    Signup.jsx          → Register form → POST /auth/register
+
+    admin/
+      AdminDashboard.jsx  → Stats overview + charts
+      AdminTables.jsx     → Manage tables (add/delete)
+      AdminProducts.jsx   → Manage products (add/edit/delete)
+      AdminOrders.jsx     → View all orders
+      AdminAnalytics.jsx  → Revenue charts, top products, staff list
+
+    staff/
+      StaffDashboard.jsx  → Table grid, click to select table
+      StaffOrder.jsx      → Product list + cart → place order
+      StaffKitchen.jsx    → Kitchen view (Pending + Preparing columns)
+                            Uses useSocket(/ws) for real-time updates
+      StaffPayment.jsx    → Select order → choose cash/UPI → confirm pay
+
+    KitchenDisplay.jsx    → PUBLIC route: /display/kitchen
+                            Full-screen KDS (3 columns: Pending/Preparing/Completed)
+                            Uses orderSocket (/ws/orders) for real-time
+                            Has action buttons to update order status
+
+    CustomerDisplay.jsx   → PUBLIC route: /display/customer
+                            Full-screen CDS (TV-style, read-only)
+                            Uses orderSocket (/ws/orders) for real-time
+                            Shows today's active orders in large card grid
+
+  utils/
+    helpers.js          → formatCurrency(), formatTime(), statusColor map
+    toast.js            → notify.success/error/loading/promise wrappers
+
+  App.jsx               → React Router setup
+                          Route guards: AdminGuard, StaffGuard, RoleRouter
+                          Public routes: /login, /signup,
+                                         /display/kitchen, /display/customer
+
+
+----------------------------------------------------------------
+2. DATABASE COLLECTIONS (MongoDB)
+----------------------------------------------------------------
+
+users
+  _id, name, username, hashed_password, role (admin|staff), is_active
+
+tables
+  _id, number (int), capacity (int), status (available|occupied)
+
+products
+  _id, name, category, price (float), is_available (bool), image_url
+
+orders
+  _id, table_id, staff_id, status (pending|preparing|completed|paid),
+  payment_method (cash|upi|null), total_amount (float),
+  items: [ { product_id, product_name, quantity, unit_price } ],
+  created_at (datetime)
+
+
+----------------------------------------------------------------
+3. AUTHENTICATION FLOW
+----------------------------------------------------------------
+
+REGISTER:
+  POST /auth/register
+  Body: { name, username, password, role, admin_key? }
+  - If role=admin, admin_key must match ADMIN_REGISTRATION_KEY in .env
+  - Password is hashed with bcrypt before storing
+  - Returns: UserOut { id, name, username, role }
+
+LOGIN:
+  POST /auth/login
+  Body: { username, password }
+  - Verifies password hash
+  - Creates JWT token with { sub: user_id, role, exp }
+  - Token expires in ACCESS_TOKEN_EXPIRE_MINUTES (default 480 = 8 hours)
+  - Returns: { access_token, token_type: "bearer", user: UserOut }
+
+FRONTEND:
+  - Token stored in localStorage["token"]
+  - User object stored in localStorage["user"]
+  - api.js interceptor auto-adds: Authorization: Bearer <token>
+  - On 401 response → clears localStorage → redirects to /login
+
+ROUTE GUARDS (App.jsx):
+  - AdminGuard  → only role=admin, else redirect to /staff/tables
+  - StaffGuard  → only role=staff, else redirect to /admin/dashboard
+  - RoleRouter  → redirects based on role after login
+  - /display/kitchen and /display/customer → NO auth guard (public)
+
+
+----------------------------------------------------------------
+4. ORDER LIFECYCLE
+----------------------------------------------------------------
+
+STEP 1 - SELECT TABLE (StaffDashboard)
+  GET /tables → shows all tables with status
+  Staff clicks an available table
+  → table saved in OrderContext.selectedTable
+  → navigate to /staff/order
+
+STEP 2 - BUILD ORDER (StaffOrder)
+  GET /products → shows product grid
+  Staff adds items to cart (OrderContext.cart)
+  Cart shows running total
+  Staff clicks "Place Order"
+
+STEP 3 - PLACE ORDER (StaffOrder → POST /orders/)
+  Body: { table_id, items: [{ product_id, quantity }] }
+  Backend (order_service.py):
+    - Validates each product exists and is_available=true
+    - Calculates total_amount
+    - Inserts order into MongoDB with status="pending"
+  Backend (orders.py):
+    - Updates table status → "occupied"
+    - Broadcasts to /ws:       { event: "new_order", order_id, table_id }
+    - Broadcasts to /ws/orders: { type: "NEW_ORDER", data: <full order> }
+  Frontend:
+    - Clears cart
+    - Navigates to /staff/payment
+
+STEP 4 - KITCHEN PROCESSES ORDER
+  Option A: StaffKitchen (/staff/kitchen)
+    - Staff-facing kitchen view
+    - Shows Pending and Preparing columns
+    - Listens on /ws for real-time updates
+    - Buttons: "▶ Start" (pending→preparing), "✓ Done" (preparing→completed)
+
+  Option B: KitchenDisplay (/display/kitchen)
+    - Dedicated full-screen KDS (meant for kitchen monitor)
+    - Shows Pending, Preparing, Completed columns
+    - Listens on /ws/orders for real-time updates
+    - Same action buttons as StaffKitchen
+
+  Status Update:
+    PATCH /orders/{id}/status
+    Body: { status: "preparing" | "completed" }
+    Backend:
+      - Updates order status in MongoDB
+      - Broadcasts to /ws:       { event: "order_updated", order_id, status }
+      - Broadcasts to /ws/orders: { type: "UPDATE_ORDER", data: <full order> }
+
+STEP 5 - CUSTOMER SEES STATUS (CustomerDisplay)
+  /display/customer → public URL, open on customer-facing screen/TV
+  - Fetches today's active orders on load (GET /orders/)
+  - Listens on /ws/orders for real-time updates
+  - Shows order cards with table number, items, status badge
+  - Status: ⏳ Pending → 👨‍🍳 Preparing → ✅ Ready
+  - Paid orders automatically disappear from display
+
+STEP 6 - PAYMENT (StaffPayment)
+  GET /orders/ → shows orders with status pending/preparing/completed
+  Staff selects order → chooses Cash or UPI
+  POST /orders/{id}/pay
+  Body: { payment_method: "cash" | "upi" }
+  Backend:
+    - Sets order status → "paid"
+    - Sets payment_method
+    - Updates table status → "available"
+  Frontend:
+    - Shows success animation
+    - Refreshes order list
+
+
+----------------------------------------------------------------
+5. REAL-TIME WEBSOCKET SYSTEM
+----------------------------------------------------------------
+
+TWO WebSocket endpoints:
+
+  /ws  (legacy, used by StaffKitchen)
+    - Simple broadcast: { event: "new_order"|"order_updated", ... }
+    - Triggers a re-fetch of /kitchen/orders on the client
+
+  /ws/orders  (new, used by KitchenDisplay + CustomerDisplay)
+    - Full order broadcast: { type: "NEW_ORDER"|"UPDATE_ORDER", data: <order> }
+    - Client updates state directly without re-fetching
+
+ConnectionManager (manager.py):
+  - Maintains two separate connection lists
+  - broadcast()       → sends to all /ws clients
+  - broadcast_order() → sends to all /ws/orders clients
+                        auto-removes dead connections
+
+OrderSocket (socket.js) - Singleton:
+  - One shared WebSocket instance for the whole app
+  - Multiple components can subscribe/unsubscribe independently
+  - Auto-reconnects every 3 seconds if connection drops
+  - subscribe(fn) → returns unsubscribe function (used in useEffect cleanup)
+
+When is broadcast triggered?
+  POST /orders/       → NEW_ORDER broadcast to both /ws and /ws/orders
+  PATCH /orders/status → UPDATE_ORDER broadcast to both /ws and /ws/orders
+  POST /orders/pay    → NO broadcast (order leaves active display naturally)
+
+
+----------------------------------------------------------------
+6. ADMIN FEATURES
+----------------------------------------------------------------
+
+AdminDashboard:
+  GET /kitchen/dashboard → total orders, revenue, counts by status
+  GET /orders/           → recent orders list
+  Shows: stat cards, bar chart (orders by hour), status breakdown
+
+AdminTables:
+  GET /tables            → list all tables
+  POST /tables           → add table { number, capacity }
+  DELETE /tables/{id}    → delete table
+
+AdminProducts:
+  GET /products          → list all products
+  POST /products         → add product { name, category, price, is_available, image_url }
+  PATCH /products/{id}   → update product fields
+  DELETE /products/{id}  → delete product
+
+AdminOrders:
+  GET /orders/           → all orders with full details
+
+AdminAnalytics:
+  GET /analytics/overview      → totals (orders, revenue, tables, products)
+  GET /analytics/daily-revenue → last 7 days revenue + order count per day
+  GET /analytics/top-products  → top 6 products by quantity sold
+  GET /analytics/staff         → list of all staff users
+
+
+----------------------------------------------------------------
+7. API ENDPOINTS SUMMARY
+----------------------------------------------------------------
+
+AUTH
+  POST   /auth/register          → register user
+  POST   /auth/login             → login, get JWT token
+
+TABLES
+  GET    /tables/                → list all tables
+  POST   /tables/                → create table
+  PATCH  /tables/{id}            → update table status
+  DELETE /tables/{id}            → delete table
+
+PRODUCTS
+  GET    /products/              → list all products
+  POST   /products/              → create product
+  PATCH  /products/{id}          → update product
+  DELETE /products/{id}          → delete product
+
+ORDERS
+  GET    /orders/                → list all orders
+  GET    /orders/{id}            → get single order
+  POST   /orders/                → create order (triggers WS broadcast)
+  PATCH  /orders/{id}/status     → update status (triggers WS broadcast)
+  POST   /orders/{id}/pay        → mark as paid
+
+KITCHEN
+  GET    /kitchen/orders         → active orders (pending + preparing)
+  GET    /kitchen/dashboard      → counts + revenue summary
+
+ANALYTICS
+  GET    /analytics/overview     → full stats overview
+  GET    /analytics/daily-revenue → 7-day revenue chart data
+  GET    /analytics/top-products  → top selling products
+  GET    /analytics/staff         → staff list
+
+WEBSOCKETS
+  WS     /ws                     → real-time for StaffKitchen
+  WS     /ws/orders              → real-time for KitchenDisplay + CustomerDisplay
+
+
+----------------------------------------------------------------
+8. FRONTEND ROUTES SUMMARY
+----------------------------------------------------------------
+
+PUBLIC (no login required)
+  /login                  → Login page
+  /signup                 → Register page
+  /display/kitchen        → Kitchen Display Screen (KDS)
+  /display/customer       → Customer Display Screen (CDS)
+
+ADMIN ONLY (role=admin)
+  /admin/dashboard        → Dashboard with stats + charts
+  /admin/tables           → Manage tables
+  /admin/products         → Manage products
+  /admin/orders           → View all orders
+  /admin/analytics        → Analytics + reports
+
+STAFF ONLY (role=staff)
+  /staff/tables           → Table selection grid
+  /staff/order            → Place new order
+  /staff/kitchen          → Kitchen order management
+  /staff/payment          → Process payment
+
+  /  (root)               → Auto-redirects based on role
+
+
+----------------------------------------------------------------
+9. ENVIRONMENT VARIABLES (.env in backend/)
+----------------------------------------------------------------
+
+MONGO_URL=mongodb://localhost:27017
+MONGO_DB=cafepos
+SECRET_KEY=your-secret-key-here
+ACCESS_TOKEN_EXPIRE_MINUTES=480
+ADMIN_REGISTRATION_KEY=cafe-admin-2024
+
+
+----------------------------------------------------------------
+10. HOW TO RUN
+----------------------------------------------------------------
+
+Backend:
+  cd backend
+  pip install -r requirements.txt
+  uvicorn app.main:app --reload --port 8000
+
+Frontend:
+  cd frontend
+  npm install
+  npm run dev
+
+Seed data (optional):
+  python backend/seed.py        → seeds products + tables
+  python backend/seed_admin.py  → creates default admin user
+
+Access:
+  App:              http://localhost:5173
+  API docs:         http://localhost:8000/docs
+  Kitchen Display:  http://localhost:5173/display/kitchen
+  Customer Display: http://localhost:5173/display/customer
+
+
+================================================================
+END OF WORKFLOW DOCUMENT
+================================================================

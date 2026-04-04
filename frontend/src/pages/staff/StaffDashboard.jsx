@@ -1,26 +1,67 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, RefreshCw, Users } from 'lucide-react'
+import { RefreshCw, Users, ShoppingBag } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../../services/api'
-import Modal from '../../components/common/Modal'
-import Button from '../../components/common/Button'
 import Skeleton from '../../components/common/Skeleton'
 import { useOrder } from '../../context/OrderContext'
 import { notify } from '../../utils/toast'
 import { statusColor } from '../../utils/helpers'
+import { orderSocket } from '../../services/socket'
 
 export default function StaffDashboard() {
   const [tables, setTables] = useState([])
+  const [activeOrders, setActiveOrders] = useState({}) // tableId → count
   const [loading, setLoading] = useState(true)
   const { setSelectedTable } = useOrder()
   const navigate = useNavigate()
 
-  const fetch = () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true)
-    api.get('/tables').then(r => { setTables(r.data); setLoading(false) })
-  }
-  useEffect(() => { fetch() }, [])
+    try {
+      const [tablesRes, ordersRes] = await Promise.all([
+        api.get('/tables'),
+        api.get('/orders/'),
+      ])
+      setTables(tablesRes.data)
+      // Build active order count per table
+      const counts = {}
+      ordersRes.data
+        .filter(o => ['pending', 'preparing'].includes(o.status))
+        .forEach(o => { counts[o.table_id] = (counts[o.table_id] || 0) + 1 })
+      setActiveOrders(counts)
+    } catch {}
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    fetchAll()
+
+    orderSocket.shouldReconnect = true
+    orderSocket.connect()
+
+    const unsub = orderSocket.subscribe((msg) => {
+      if (msg.type === 'NEW_ORDER') {
+        // Mark table occupied + increment count
+        setTables(prev => prev.map(t => t.id === msg.data.table_id ? { ...t, status: 'occupied' } : t))
+        setActiveOrders(prev => ({ ...prev, [msg.data.table_id]: (prev[msg.data.table_id] || 0) + 1 }))
+      } else if (msg.type === 'UPDATE_ORDER') {
+        if (msg.data.status === 'completed') {
+          // Decrement count, mark available if 0
+          setActiveOrders(prev => {
+            const next = { ...prev }
+            next[msg.data.table_id] = Math.max(0, (next[msg.data.table_id] || 1) - 1)
+            if (next[msg.data.table_id] === 0) {
+              setTables(t => t.map(tb => tb.id === msg.data.table_id ? { ...tb, status: 'available' } : tb))
+            }
+            return next
+          })
+        }
+      }
+    })
+
+    return () => unsub()
+  }, [fetchAll])
 
   const handleClick = (table) => {
     setSelectedTable(table)
@@ -40,34 +81,44 @@ export default function StaffDashboard() {
             <span className="text-red-400 font-medium">{tables.length - available}</span> occupied
           </p>
         </div>
-        <button onClick={fetch} className="btn-ghost w-9 h-9 p-0 flex items-center justify-center">
+        <button onClick={fetchAll} className="btn-ghost w-9 h-9 p-0 flex items-center justify-center">
           <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+          {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-36" />)}
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {tables.map((table, i) => (
-            <motion.div key={table.id}
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-              whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
-              onClick={() => handleClick(table)}
-              className={`relative cursor-pointer rounded-2xl border-2 p-4 select-none transition-all
-                ${table.status === 'occupied'
-                  ? 'border-red-500/40 bg-red-500/5 hover:border-red-500/60'
-                  : 'border-green-500/40 bg-green-500/5 hover:border-green-500/60 hover:shadow-[0_0_20px_rgba(34,197,94,0.1)]'}`}>
-              <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${table.status === 'occupied' ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`} />
-              <p className="text-3xl font-black text-white mb-1">T{table.number}</p>
-              <div className="flex items-center gap-1 text-gray-400 text-xs mb-3">
-                <Users size={11} /><span>{table.capacity} seats</span>
-              </div>
-              <span className={`badge ${statusColor[table.status]} capitalize text-xs`}>{table.status}</span>
-            </motion.div>
-          ))}
+          {tables.map((table, i) => {
+            const orderCount = activeOrders[table.id] || 0
+            const isOccupied = table.status === 'occupied'
+            return (
+              <motion.div key={table.id}
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+                whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
+                onClick={() => handleClick(table)}
+                className={`relative cursor-pointer rounded-2xl border-2 p-4 select-none transition-all
+                  ${isOccupied
+                    ? 'border-red-500/40 bg-red-500/5 hover:border-red-500/60'
+                    : 'border-green-500/40 bg-green-500/5 hover:border-green-500/60 hover:shadow-[0_0_20px_rgba(34,197,94,0.1)]'}`}>
+                <div className={`absolute top-3 right-3 w-2 h-2 rounded-full ${isOccupied ? 'bg-red-400' : 'bg-green-400 animate-pulse'}`} />
+                <p className="text-3xl font-black text-white mb-1">T{table.number}</p>
+                <div className="flex items-center gap-1 text-gray-400 text-xs mb-2">
+                  <Users size={11} /><span>{table.capacity} seats</span>
+                </div>
+                {orderCount > 0 && (
+                  <div className="flex items-center gap-1 mb-2">
+                    <ShoppingBag size={11} className="text-orange-400" />
+                    <span className="text-xs text-orange-400 font-medium">{orderCount} active order{orderCount > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                <span className={`badge ${statusColor[table.status]} capitalize text-xs`}>{table.status}</span>
+              </motion.div>
+            )
+          })}
         </div>
       )}
       {!loading && tables.length === 0 && (

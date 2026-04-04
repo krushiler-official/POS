@@ -105,7 +105,6 @@ export default function AdminDashboard() {
                 { label: 'Pending', value: overview?.pending || 0, color: 'bg-yellow-500', bg: 'bg-yellow-500/10' },
                 { label: 'Preparing', value: overview?.preparing || 0, color: 'bg-blue-500', bg: 'bg-blue-500/10' },
                 { label: 'Completed', value: overview?.completed || 0, color: 'bg-green-500', bg: 'bg-green-500/10' },
-                { label: 'Paid', value: overview?.paid || 0, color: 'bg-purple-500', bg: 'bg-purple-500/10' },
               ].map(({ label, value, color, bg }) => (
                 <div key={label} className={`flex items-center justify-between px-3 py-2.5 rounded-xl ${bg}`}>
                   <div className="flex items-center gap-2">

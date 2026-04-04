@@ -5,7 +5,7 @@ import api from '../../services/api'
 import Skeleton from '../../components/common/Skeleton'
 import { formatCurrency, formatTime, statusColor } from '../../utils/helpers'
 
-const STATUSES = ['all', 'pending', 'preparing', 'completed', 'paid']
+const STATUSES = ['all', 'pending', 'preparing', 'completed']
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([])

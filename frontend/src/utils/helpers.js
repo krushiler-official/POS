@@ -8,7 +8,6 @@ export const statusColor = {
   pending: 'bg-yellow-500/20 text-yellow-400',
   preparing: 'bg-blue-500/20 text-blue-400',
   completed: 'bg-green-500/20 text-green-400',
-  paid: 'bg-gray-500/20 text-gray-400',
   available: 'bg-green-500/20 text-green-400',
   occupied: 'bg-red-500/20 text-red-400',
 }

@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { UtensilsCrossed, ShoppingCart, ChefHat, CreditCard, LogOut, Coffee } from 'lucide-react'
+import { UtensilsCrossed, ShoppingCart, ChefHat, LogOut, Coffee } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../context/OrderContext'
 
@@ -7,7 +7,6 @@ const links = [
   { to: '/staff/tables', icon: UtensilsCrossed, label: 'Tables' },
   { to: '/staff/order', icon: ShoppingCart, label: 'Order' },
   { to: '/staff/kitchen', icon: ChefHat, label: 'Kitchen' },
-  { to: '/staff/payment', icon: CreditCard, label: 'Payment' },
 ]
 
 export default function StaffLayout({ children }) {

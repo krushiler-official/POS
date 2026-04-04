@@ -20,13 +20,12 @@ async def get_kitchen_orders(_=Depends(get_current_user)):
 async def get_dashboard(_=Depends(get_current_user)):
     db = get_database()
     total_orders = await db.orders.count_documents({})
-    paid_orders = await db.orders.find({"status": OrderStatus.paid}).to_list(None)
-    total_revenue = sum(o.get("total_amount", 0) for o in paid_orders)
+    all_orders = await db.orders.find({}).to_list(None)
+    total_revenue = sum(o.get("total_amount", 0) for o in all_orders)
     return {
         "total_orders": total_orders,
         "total_revenue": total_revenue,
         "pending": await db.orders.count_documents({"status": OrderStatus.pending}),
         "preparing": await db.orders.count_documents({"status": OrderStatus.preparing}),
         "completed": await db.orders.count_documents({"status": OrderStatus.completed}),
-        "paid": await db.orders.count_documents({"status": OrderStatus.paid}),
     }

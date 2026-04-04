@@ -23,8 +23,9 @@ async def create_order_with_items(db, data: OrderCreate, staff_id: str) -> dict:
         "table_id": data.table_id,
         "staff_id": staff_id,
         "status": "pending",
-        "payment_method": None,
-        "total_amount": total,
+        "payment_status": "paid",
+        "payment_method": data.payment_method,
+        "total_amount": round(total, 2),
         "items": items_data,
         "created_at": datetime.now(timezone.utc),
     })

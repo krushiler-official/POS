@@ -4,21 +4,27 @@ import json
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self._connections: List[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
-        self.active_connections.append(websocket)
+        self._connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self._connections:
+            self._connections.remove(websocket)
 
-    async def broadcast(self, data: dict):
-        message = json.dumps(data)
-        for connection in self.active_connections:
+    async def broadcast(self, event_type: str, data: dict):
+        if not self._connections:
+            return
+        message = json.dumps({"type": event_type, "data": data})
+        dead = []
+        for ws in self._connections:
             try:
-                await connection.send_text(message)
+                await ws.send_text(message)
             except Exception:
-                pass
+                dead.append(ws)
+        for ws in dead:
+            self._connections.remove(ws)
 
 manager = ConnectionManager()

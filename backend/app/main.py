@@ -11,11 +11,11 @@ async def lifespan(app: FastAPI):
     yield
     await close_db()
 
-app = FastAPI(title="POS Cafe API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="POS Cafe API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -28,8 +28,8 @@ app.include_router(orders.router)
 app.include_router(kitchen.router)
 app.include_router(analytics.router)
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket("/ws/orders")
+async def websocket_orders(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
@@ -39,4 +39,4 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/")
 def root():
-    return {"message": "POS Cafe API is running"}
+    return {"message": "POS Cafe API v2.0 is running"}

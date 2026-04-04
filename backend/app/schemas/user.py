@@ -1,13 +1,14 @@
 from pydantic import BaseModel
-from typing import Optional
 from app.models.user import UserRole
 
 class UserCreate(BaseModel):
     name: str
     username: str
     password: str
-    role: UserRole = UserRole.staff
-    admin_key: Optional[str] = None
+
+class PromoteRequest(BaseModel):
+    user_id: str
+    role: UserRole
 
 class UserOut(BaseModel):
     id: str

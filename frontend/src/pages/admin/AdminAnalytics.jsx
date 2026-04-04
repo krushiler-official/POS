@@ -45,7 +45,6 @@ export default function AdminAnalytics() {
     { name: 'Pending', value: overview.pending },
     { name: 'Preparing', value: overview.preparing },
     { name: 'Completed', value: overview.completed },
-    { name: 'Paid', value: overview.paid },
   ].filter(d => d.value > 0) : []
 
   const totalRevenue = daily.reduce((s, d) => s + d.revenue, 0)

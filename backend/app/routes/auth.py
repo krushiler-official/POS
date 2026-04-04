@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.core.database import get_database
 from app.core.utils import doc, to_oid
 from app.models.user import UserRole
-from app.schemas.user import UserCreate, UserOut, Token, LoginRequest
+from app.schemas.user import UserCreate, UserOut, Token, LoginRequest, PromoteRequest
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -36,23 +36,42 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(b
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+async def require_admin(user=Depends(get_current_user)):
+    if user.get("role") != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
 @router.post("/register", response_model=UserOut)
 async def register(data: UserCreate):
+    """Public registration — always creates a staff account."""
     db = get_database()
     if await db.users.find_one({"username": data.username}):
         raise HTTPException(status_code=400, detail="Username already exists")
-    if data.role == UserRole.admin:
-        if not data.admin_key or data.admin_key != settings.ADMIN_REGISTRATION_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin registration key")
     result = await db.users.insert_one({
         "name": data.name,
         "username": data.username,
         "hashed_password": hash_password(data.password),
-        "role": data.role,
+        "role": UserRole.staff,
         "is_active": True,
     })
     user = await db.users.find_one({"_id": result.inserted_id})
     return doc(user)
+
+@router.post("/promote", response_model=UserOut)
+async def promote_user(data: PromoteRequest, admin=Depends(require_admin)):
+    """Admin-only: promote or demote any user's role."""
+    db = get_database()
+    # Prevent admin from demoting themselves
+    if data.user_id == admin["id"] and data.role != UserRole.admin:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    result = await db.users.find_one_and_update(
+        {"_id": to_oid(data.user_id)},
+        {"$set": {"role": data.role}},
+        return_document=True,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    return doc(result)
 
 @router.post("/login", response_model=Token)
 async def login(data: LoginRequest):
@@ -61,5 +80,5 @@ async def login(data: LoginRequest):
     if not user or not verify_password(data.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     user = doc(user)
-    token = create_token({"sub": user["id"], "role": user["role"]})
+    token = create_token({"sub": user["id"], "role": str(user["role"])})
     return {"access_token": token, "token_type": "bearer", "user": user}

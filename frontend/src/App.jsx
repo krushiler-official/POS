@@ -7,6 +7,10 @@ import { OrderProvider } from './context/OrderContext'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 
+// Display screens (public)
+import KitchenDisplay from './pages/KitchenDisplay'
+import CustomerDisplay from './pages/CustomerDisplay'
+
 // Admin
 import AdminLayout from './components/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -14,13 +18,13 @@ import AdminTables from './pages/admin/AdminTables'
 import AdminProducts from './pages/admin/AdminProducts'
 import AdminOrders from './pages/admin/AdminOrders'
 import AdminAnalytics from './pages/admin/AdminAnalytics'
+import AdminStaff from './pages/admin/AdminStaff'
 
 // Staff
 import StaffLayout from './components/staff/StaffLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 import StaffOrder from './pages/staff/StaffOrder'
 import StaffKitchen from './pages/staff/StaffKitchen'
-import StaffPayment from './pages/staff/StaffPayment'
 
 function RoleRouter() {
   const { user } = useAuth()
@@ -59,6 +63,8 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/display/kitchen" element={<KitchenDisplay />} />
+            <Route path="/display/customer" element={<CustomerDisplay />} />
             <Route path="/" element={<RoleRouter />} />
 
             {/* Admin routes */}
@@ -68,6 +74,7 @@ export default function App() {
               <Route path="/admin/products" element={<AdminProducts />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
+              <Route path="/admin/staff" element={<AdminStaff />} />
             </Route>
 
             {/* Staff routes */}
@@ -75,7 +82,6 @@ export default function App() {
               <Route path="/staff/tables" element={<StaffDashboard />} />
               <Route path="/staff/order" element={<StaffOrder />} />
               <Route path="/staff/kitchen" element={<StaffKitchen />} />
-              <Route path="/staff/payment" element={<StaffPayment />} />
             </Route>
 
             <Route path="*" element={<RoleRouter />} />

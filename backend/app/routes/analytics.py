@@ -11,8 +11,8 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 async def get_overview(_=Depends(get_current_user)):
     db = get_database()
     total_orders = await db.orders.count_documents({})
-    paid_orders = await db.orders.find({"status": OrderStatus.paid}).to_list(None)
-    total_revenue = sum(o.get("total_amount", 0) for o in paid_orders)
+    all_orders = await db.orders.find({}).to_list(None)
+    total_revenue = sum(o.get("total_amount", 0) for o in all_orders)
     total_tables = await db.tables.count_documents({})
     occupied = await db.tables.count_documents({"status": "occupied"})
     total_products = await db.products.count_documents({"is_available": True})
@@ -25,7 +25,6 @@ async def get_overview(_=Depends(get_current_user)):
         "pending": await db.orders.count_documents({"status": OrderStatus.pending}),
         "preparing": await db.orders.count_documents({"status": OrderStatus.preparing}),
         "completed": await db.orders.count_documents({"status": OrderStatus.completed}),
-        "paid": await db.orders.count_documents({"status": OrderStatus.paid}),
     }
 
 @router.get("/daily-revenue")
@@ -36,7 +35,7 @@ async def get_daily_revenue(_=Depends(get_current_user)):
         day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=i)
         day_end = day_start + timedelta(days=1)
         orders = await db.orders.find({
-            "status": OrderStatus.paid,
+            "payment_status": "paid",
             "created_at": {"$gte": day_start, "$lt": day_end}
         }).to_list(None)
         revenue = sum(o.get("total_amount", 0) for o in orders)
@@ -50,7 +49,7 @@ async def get_daily_revenue(_=Depends(get_current_user)):
 @router.get("/top-products")
 async def get_top_products(_=Depends(get_current_user)):
     db = get_database()
-    orders = await db.orders.find({"status": OrderStatus.paid}).to_list(None)
+    orders = await db.orders.find({"payment_status": "paid"}).to_list(None)
     product_sales = {}
     for order in orders:
         for item in order.get("items", []):
