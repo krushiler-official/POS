@@ -3,6 +3,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import connect_db, close_db
 from app.routes import auth, tables, products, orders, kitchen, analytics
+from app.routes.public import router as public_router
 from app.websockets.manager import manager
 
 @asynccontextmanager
@@ -27,6 +28,7 @@ app.include_router(products.router)
 app.include_router(orders.router)
 app.include_router(kitchen.router)
 app.include_router(analytics.router)
+app.include_router(public_router)
 
 @app.websocket("/ws/orders")
 async def websocket_orders(websocket: WebSocket):

@@ -5,9 +5,8 @@ export const formatTime = (dateStr) =>
   new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 
 export const statusColor = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
   preparing: 'bg-blue-500/20 text-blue-400',
   completed: 'bg-green-500/20 text-green-400',
   available: 'bg-green-500/20 text-green-400',
-  occupied: 'bg-red-500/20 text-red-400',
+  occupied:  'bg-red-500/20 text-red-400',
 }

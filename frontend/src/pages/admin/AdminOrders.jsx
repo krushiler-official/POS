@@ -15,7 +15,10 @@ export default function AdminOrders() {
 
   const fetch = () => {
     setLoading(true)
-    api.get('/orders').then(r => { setOrders(r.data); setLoading(false) })
+    api.get('/orders')
+      .then(r => { setOrders(r.data) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }
   useEffect(() => { fetch() }, [])
 

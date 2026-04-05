@@ -1,100 +1,229 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Minus, Trash2, ShoppingCart, Search, Banknote, Smartphone, CheckCircle, X } from 'lucide-react'
+import { Plus, Minus, Trash2, ShoppingCart, Search, Banknote, Smartphone, CheckCircle, X, Delete } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import api from '../../services/api'
 import { useOrder } from '../../context/OrderContext'
 import { formatCurrency } from '../../utils/helpers'
 import { notify } from '../../utils/toast'
 import Skeleton from '../../components/common/Skeleton'
+import { upiLink, UPI_ID } from '../../utils/upi'
 
 const CATEGORIES = ['All', 'Coffee', 'Tea', 'Food', 'Snacks', 'Dessert', 'Drinks']
 const EMOJI = { Coffee: '☕', Tea: '🍵', Food: '🍽️', Snacks: '🍟', Dessert: '🍰', Drinks: '🥤' }
 
-// Static QR pattern (deterministic, not random)
-const QR_PATTERN = [
-  1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1,
-  1,0,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1,
-  1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,
-  1,0,1,1,1,0,1,0,0,1,1,0,0,0,1,0,1,1,1,0,1,
-  1,0,1,1,1,0,1,0,1,1,0,1,1,0,1,0,1,1,1,0,1,
-  1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1,
-  1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1,
-  0,0,0,0,0,0,0,0,1,1,0,1,1,0,0,0,0,0,0,0,0,
-  1,0,1,1,0,1,1,1,0,1,1,0,1,1,1,0,1,1,0,1,1,
-  0,1,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,
-  1,1,1,0,1,1,1,1,0,1,0,0,1,1,0,1,1,0,1,1,1,
-  0,0,1,0,0,1,0,0,1,0,1,0,0,1,0,0,1,0,0,1,0,
-  1,1,0,1,1,0,1,1,0,1,1,0,1,1,1,0,1,1,0,1,1,
-  0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,1,0,0,1,0,0,
-  1,1,1,1,1,1,1,0,1,1,0,0,1,0,1,0,1,1,0,1,1,
-  1,0,0,0,0,0,1,0,0,0,1,0,0,1,0,1,0,0,1,0,0,
-  1,0,1,1,1,0,1,0,1,1,0,1,1,0,1,0,1,1,0,1,1,
-  1,0,1,1,1,0,1,0,0,1,0,0,0,1,0,1,0,0,1,0,0,
-  1,0,1,1,1,0,1,0,1,0,1,1,0,0,1,0,1,1,0,1,1,
-  1,0,0,0,0,0,1,0,0,1,0,0,1,0,0,1,0,0,1,0,0,
-  1,1,1,1,1,1,1,0,1,0,1,1,0,1,1,0,1,1,0,1,1,
-]
+// ── Keypad Modal ──────────────────────────────────────────────
+function KeypadModal({ total, onConfirm, onClose }) {
+  const [input, setInput] = useState('')
+  const [payMethod, setPayMethod] = useState(null)
+  const [showUPI, setShowUPI] = useState(false)
 
-function UPIModal({ amount, onConfirm, onClose }) {
+  const entered = parseFloat(input) || 0
+  const change = entered - total
+  const exactButtons = [
+    total,
+    Math.ceil(total / 10) * 10,
+    Math.ceil(total / 50) * 50,
+    Math.ceil(total / 100) * 100,
+  ].filter((v, i, a) => a.indexOf(v) === i) // deduplicate
+
+  const press = (val) => {
+    if (val === 'C') { setInput(''); return }
+    if (val === '⌫') { setInput(p => p.slice(0, -1)); return }
+    if (val === '.' && input.includes('.')) return
+    if (input.length >= 8) return
+    setInput(p => p + val)
+  }
+
+  const keys = ['7','8','9','4','5','6','1','2','3','.','0','⌫']
+
+  const handlePay = () => {
+    if (!payMethod) return
+    if (payMethod === 'upi') { setShowUPI(true); return }
+    onConfirm('cash')
+  }
+
+  const canPay = payMethod === 'upi' || (payMethod === 'cash' && entered >= total)
+
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
+        initial={{ scale: 0.92, y: 24 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.92, y: 24 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
         onClick={e => e.stopPropagation()}
-        className="bg-surface-1 border border-surface-border rounded-3xl p-8 w-80 flex flex-col items-center gap-5 shadow-card"
+        className="bg-surface-1 border border-surface-border rounded-3xl shadow-card w-full max-w-sm mx-4 overflow-hidden"
       >
-        <div className="flex items-center justify-between w-full">
-          <h3 className="font-bold text-white text-lg">Scan & Pay</h3>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-surface-2 flex items-center justify-center text-gray-400 hover:text-white transition-all">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3">
+          <h3 className="font-bold text-white text-lg">Payment</h3>
+          <button onClick={onClose}
+            className="w-8 h-8 rounded-xl bg-surface-2 flex items-center justify-center text-gray-400 hover:text-white transition-all">
             <X size={15} />
           </button>
         </div>
 
-        {/* QR Code */}
-        <div className="bg-white p-3 rounded-2xl">
-          <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(21, 1fr)', width: 168 }}>
-            {QR_PATTERN.map((cell, i) => (
-              <div key={i} className={`w-2 h-2 ${cell ? 'bg-gray-900' : 'bg-white'}`} />
+        {/* Amount due */}
+        <div className="px-6 pb-4">
+          <div className="bg-surface-2 border border-surface-border rounded-2xl p-4 flex items-center justify-between">
+            <span className="text-sm text-gray-400">Amount Due</span>
+            <span className="text-2xl font-black text-brand">{formatCurrency(total)}</span>
+          </div>
+        </div>
+
+        {/* Payment method */}
+        <div className="px-6 pb-4">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Payment Method</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: 'cash', icon: Banknote, label: 'Cash' },
+              { id: 'upi',  icon: Smartphone, label: 'UPI' },
+            ].map(({ id, icon: Icon, label }) => (
+              <button key={id} onClick={() => { setPayMethod(id); if (id === 'upi') setInput('') }}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-all
+                  ${payMethod === id
+                    ? 'border-brand/60 bg-brand/15 text-brand shadow-glow-sm'
+                    : 'border-surface-border bg-surface-2 text-gray-400 hover:border-gray-500 hover:text-gray-200'}`}>
+                <Icon size={15} />{label}
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="text-center">
-          <p className="text-2xl font-black text-white">{formatCurrency(amount)}</p>
-          <p className="text-sm text-gray-400 mt-1">cafe@upi · CaféPOS</p>
-        </div>
+        {/* Cash section — only shown when cash selected */}
+        <AnimatePresence>
+          {payMethod === 'cash' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              {/* Cash received display */}
+              <div className="px-6 pb-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Cash Received</p>
+                <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between transition-all
+                  ${entered >= total && entered > 0 ? 'border-green-500/40 bg-green-500/5' : 'border-surface-border bg-surface-2'}`}>
+                  <span className="text-2xl font-black text-white tracking-widest">
+                    {input ? `₹${input}` : <span className="text-gray-600">₹0</span>}
+                  </span>
+                  {entered >= total && entered > 0 && (
+                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                      className="flex items-center gap-1.5 bg-green-500/20 border border-green-500/30 px-2.5 py-1 rounded-xl">
+                      <span className="text-xs font-bold text-green-400">
+                        Change: {formatCurrency(change)}
+                      </span>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
 
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={onConfirm}
-          className="btn-primary w-full py-3 text-sm"
-        >
-          ✓ Confirm Payment Received
-        </motion.button>
+              {/* Quick exact amount buttons */}
+              <div className="px-6 pb-3 flex gap-2 overflow-x-auto">
+                {exactButtons.map(amt => (
+                  <button key={amt} onClick={() => setInput(String(amt))}
+                    className={`shrink-0 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all
+                      ${entered === amt
+                        ? 'border-brand/60 bg-brand/15 text-brand'
+                        : 'border-surface-border bg-surface-2 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
+                    ₹{amt}
+                  </button>
+                ))}
+                <button onClick={() => setInput('')}
+                  className="shrink-0 px-3 py-1.5 rounded-xl border border-surface-border bg-surface-2 text-gray-500 hover:text-red-400 hover:border-red-500/30 text-xs font-bold transition-all">
+                  Clear
+                </button>
+              </div>
+
+              {/* Numpad */}
+              <div className="px-6 pb-4 grid grid-cols-3 gap-2">
+                {keys.map(k => (
+                  <motion.button key={k} whileTap={{ scale: 0.92 }} onClick={() => press(k)}
+                    className={`h-12 rounded-2xl font-bold text-base transition-all flex items-center justify-center
+                      ${k === '⌫'
+                        ? 'bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20'
+                        : 'bg-surface-2 border border-surface-border text-white hover:bg-surface-3 hover:border-gray-500'}`}>
+                    {k === '⌫' ? <Delete size={16} /> : k}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* UPI section */}
+        <AnimatePresence>
+          {showUPI && payMethod === 'upi' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="px-6 pb-4 flex flex-col items-center gap-3 overflow-hidden"
+            >
+              <div className="bg-white p-3 rounded-2xl shadow-lg">
+                <QRCodeSVG
+                  value={upiLink(total, 'Cafe Order')}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#111827"
+                  level="M"
+                />
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-black text-white">{formatCurrency(total)}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{UPI_ID} · CaféPOS</p>
+                <p className="text-xs text-gray-500 mt-1">Scan with any UPI app</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Confirm button */}
+        <div className="px-6 pb-6">
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handlePay}
+            disabled={!canPay}
+            className="btn-primary w-full py-3.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
+          >
+            {!payMethod
+              ? 'Select Payment Method'
+              : payMethod === 'cash' && entered < total && entered > 0
+                ? `Need ${formatCurrency(total - entered)} more`
+              : payMethod === 'cash' && entered === 0
+                ? 'Enter Cash Amount'
+              : payMethod === 'upi' && !showUPI
+                ? 'Show QR Code'
+              : payMethod === 'upi'
+                ? '✓ Confirm Payment Received'
+              : `✓ Confirm · ${formatCurrency(total)}`
+            }
+          </motion.button>
+        </div>
       </motion.div>
     </motion.div>
   )
 }
 
+// ── Main Component ────────────────────────────────────────────
 export default function StaffOrder() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [cat, setCat] = useState('All')
   const [search, setSearch] = useState('')
-  const [payMethod, setPayMethod] = useState(null)   // null | 'cash' | 'upi'
-  const [showUPI, setShowUPI] = useState(false)
+  const [showKeypad, setShowKeypad] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [success, setSuccess] = useState(false)
   const { cart, selectedTable, addToCart, updateQuantity, removeFromCart, clearCart, cartTotal } = useOrder()
   const navigate = useNavigate()
 
   useEffect(() => {
-    api.get('/products').then(r => { setProducts(r.data); setLoading(false) })
+    api.get('/products')
+      .then(r => { setProducts(r.data) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
   const filtered = products
@@ -105,8 +234,9 @@ export default function StaffOrder() {
   const cartQty = id => cart.find(i => i.id === id)?.quantity || 0
 
   const submitOrder = async (method) => {
-    if (!selectedTable || cart.length === 0 || !method) return
+    if (!selectedTable || cart.length === 0) return
     setPlacing(true)
+    setShowKeypad(false)
     try {
       await api.post('/orders/', {
         table_id: selectedTable.id,
@@ -123,26 +253,22 @@ export default function StaffOrder() {
     }
   }
 
-  const handlePlaceOrder = () => {
-    if (!payMethod) return
-    if (payMethod === 'upi') { setShowUPI(true); return }
-    submitOrder('cash')
-  }
-
-  const canPlace = selectedTable && cart.length > 0 && payMethod !== null
+  const canConfirm = selectedTable && cart.length > 0
 
   return (
     <>
+      {/* Keypad Modal */}
       <AnimatePresence>
-        {showUPI && (
-          <UPIModal
-            amount={cartTotal}
-            onConfirm={() => { setShowUPI(false); submitOrder('upi') }}
-            onClose={() => setShowUPI(false)}
+        {showKeypad && (
+          <KeypadModal
+            total={cartTotal}
+            onConfirm={(method) => submitOrder(method)}
+            onClose={() => setShowKeypad(false)}
           />
         )}
       </AnimatePresence>
 
+      {/* Success overlay */}
       <AnimatePresence>
         {success && (
           <motion.div
@@ -150,7 +276,8 @@ export default function StaffOrder() {
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           >
             <motion.div
-              initial={{ scale: 0.5 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+              initial={{ scale: 0.5 }} animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
               className="flex flex-col items-center gap-4"
             >
               <div className="w-24 h-24 rounded-full bg-green-500/20 border-2 border-green-500/50 flex items-center justify-center">
@@ -217,14 +344,15 @@ export default function StaffOrder() {
             </AnimatePresence>
             {filtered.length === 0 && !loading && (
               <div className="col-span-3 flex flex-col items-center justify-center py-12 text-gray-500">
-                <div className="text-4xl mb-2">🔍</div><p className="text-sm">No items found</p>
+                <div className="text-4xl mb-2">🔍</div>
+                <p className="text-sm">No items found</p>
               </div>
             )}
             {loading && [...Array(6)].map((_, i) => <Skeleton key={i} className="h-36" />)}
           </div>
         </div>
 
-        {/* ── Right panel: Cart + Payment ── */}
+        {/* ── Right panel: Cart ── */}
         <div className="w-72 border-l border-surface-border flex flex-col bg-surface-1/40">
 
           {/* Cart header */}
@@ -282,40 +410,17 @@ export default function StaffOrder() {
             </div>
           )}
 
-          {/* Payment + Total section */}
+          {/* Total + Confirm button */}
           <div className="border-t border-surface-border p-4 space-y-3 shrink-0">
-            {/* Total */}
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-400">Total</span>
               <span className="text-lg font-bold text-brand">{formatCurrency(cartTotal)}</span>
             </div>
 
-            {/* Payment method selector */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Payment Method</p>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: 'cash', icon: Banknote, label: 'Cash' },
-                  { id: 'upi',  icon: Smartphone, label: 'UPI' },
-                ].map(({ id, icon: Icon, label }) => (
-                  <button key={id} onClick={() => setPayMethod(id)}
-                    disabled={cart.length === 0}
-                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-xs font-semibold transition-all
-                      ${payMethod === id
-                        ? 'border-brand/60 bg-brand/15 text-brand shadow-glow-sm'
-                        : 'border-surface-border bg-surface-2 text-gray-400 hover:border-gray-500 hover:text-gray-200'}
-                      disabled:opacity-40 disabled:cursor-not-allowed`}>
-                    <Icon size={15} />{label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Place order button */}
             <motion.button
               whileTap={{ scale: 0.97 }}
-              onClick={handlePlaceOrder}
-              disabled={!canPlace || placing}
+              onClick={() => setShowKeypad(true)}
+              disabled={!canConfirm || placing}
               className="btn-primary w-full py-3 text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {placing ? (
@@ -325,9 +430,9 @@ export default function StaffOrder() {
                 </svg>
               ) : !selectedTable
                 ? 'Select a Table First'
-                : !payMethod
-                  ? 'Select Payment Method'
-                  : `Place Order · ${formatCurrency(cartTotal)}`
+                : cart.length === 0
+                  ? 'Add Items First'
+                  : `Confirm Order · ${formatCurrency(cartTotal)}`
               }
             </motion.button>
           </div>

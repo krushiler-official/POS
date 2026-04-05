@@ -26,16 +26,16 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get('/analytics/overview'),
       api.get('/analytics/daily-revenue'),
-      api.get('/orders'),
+      api.get('/orders/'),
       api.get('/analytics/top-products'),
     ]).then(([ov, dv, or, tp]) => {
-      setOverview(ov.data)
-      setDaily(dv.data)
-      setOrders(or.data.slice(0, 6))
-      setTopProducts(tp.data)
+      if (ov.status === 'fulfilled') setOverview(ov.value.data)
+      if (dv.status === 'fulfilled') setDaily(dv.value.data)
+      if (or.status === 'fulfilled') setOrders(or.value.data.slice(0, 6))
+      if (tp.status === 'fulfilled') setTopProducts(tp.value.data)
       setLoading(false)
     })
   }, [])
@@ -102,7 +102,6 @@ export default function AdminDashboard() {
           {loading ? <div className="space-y-3">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10" />)}</div> : (
             <div className="space-y-3">
               {[
-                { label: 'Pending', value: overview?.pending || 0, color: 'bg-yellow-500', bg: 'bg-yellow-500/10' },
                 { label: 'Preparing', value: overview?.preparing || 0, color: 'bg-blue-500', bg: 'bg-blue-500/10' },
                 { label: 'Completed', value: overview?.completed || 0, color: 'bg-green-500', bg: 'bg-green-500/10' },
               ].map(({ label, value, color, bg }) => (

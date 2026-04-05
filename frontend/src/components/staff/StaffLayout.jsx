@@ -1,12 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { UtensilsCrossed, ShoppingCart, ChefHat, LogOut, Coffee } from 'lucide-react'
+import { UtensilsCrossed, ShoppingCart, LogOut, Coffee, Receipt } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useOrder } from '../../context/OrderContext'
 
 const links = [
-  { to: '/staff/tables', icon: UtensilsCrossed, label: 'Tables' },
-  { to: '/staff/order', icon: ShoppingCart, label: 'Order' },
-  { to: '/staff/kitchen', icon: ChefHat, label: 'Kitchen' },
+  { to: '/staff/tables',   icon: UtensilsCrossed, label: 'Tables' },
+  { to: '/staff/order',    icon: ShoppingCart,    label: 'Order' },
+  { to: '/staff/payments', icon: Receipt,         label: 'Payments' },
 ]
 
 export default function StaffLayout({ children }) {

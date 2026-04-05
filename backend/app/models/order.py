@@ -1,7 +1,6 @@
 import enum
 
 class OrderStatus(str, enum.Enum):
-    pending = "pending"
     preparing = "preparing"
     completed = "completed"
 

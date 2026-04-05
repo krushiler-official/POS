@@ -29,20 +29,19 @@ export default function AdminAnalytics() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.get('/analytics/daily-revenue'),
       api.get('/analytics/top-products'),
       api.get('/analytics/overview'),
     ]).then(([d, t, o]) => {
-      setDaily(d.data)
-      setTopProducts(t.data)
-      setOverview(o.data)
+      if (d.status === 'fulfilled') setDaily(d.value.data)
+      if (t.status === 'fulfilled') setTopProducts(t.value.data)
+      if (o.status === 'fulfilled') setOverview(o.value.data)
       setLoading(false)
     })
   }, [])
 
   const pieData = overview ? [
-    { name: 'Pending', value: overview.pending },
     { name: 'Preparing', value: overview.preparing },
     { name: 'Completed', value: overview.completed },
   ].filter(d => d.value > 0) : []

@@ -12,9 +12,9 @@ const links = [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin/tables', icon: UtensilsCrossed, label: 'Tables' },
   { to: '/admin/products', icon: Package, label: 'Products' },
-  { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
-  { to: '/admin/analytics', icon: BarChart3, label: 'Analytics' },
-  { to: '/admin/staff', icon: Users, label: 'Staff' },
+  { to: '/admin/orders',    icon: ShoppingBag, label: 'Orders' },
+  { to: '/admin/analytics', icon: BarChart3,   label: 'Analytics' },
+  { to: '/admin/staff',     icon: Users,       label: 'Staff' },
 ]
 
 export default function AdminSidebar() {

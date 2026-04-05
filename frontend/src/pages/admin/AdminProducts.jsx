@@ -25,7 +25,10 @@ export default function AdminProducts() {
 
   const fetch = () => {
     setLoading(true)
-    api.get('/products').then(r => { setProducts(r.data); setLoading(false) })
+    api.get('/products')
+      .then(r => { setProducts(r.data) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }
   useEffect(() => { fetch() }, [])
 

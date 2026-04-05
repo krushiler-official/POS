@@ -19,17 +19,18 @@ export default function StaffDashboard() {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [tablesRes, ordersRes] = await Promise.all([
+      const [tablesRes, ordersRes] = await Promise.allSettled([
         api.get('/tables'),
         api.get('/orders/'),
       ])
-      setTables(tablesRes.data)
-      // Build active order count per table
-      const counts = {}
-      ordersRes.data
-        .filter(o => ['pending', 'preparing'].includes(o.status))
-        .forEach(o => { counts[o.table_id] = (counts[o.table_id] || 0) + 1 })
-      setActiveOrders(counts)
+      if (tablesRes.status === 'fulfilled') setTables(tablesRes.value.data)
+      if (ordersRes.status === 'fulfilled') {
+        const counts = {}
+        ordersRes.value.data
+          .filter(o => o.status === 'preparing')
+          .forEach(o => { counts[o.table_id] = (counts[o.table_id] || 0) + 1 })
+        setActiveOrders(counts)
+      }
     } catch {}
     setLoading(false)
   }, [])
@@ -47,12 +48,14 @@ export default function StaffDashboard() {
         setActiveOrders(prev => ({ ...prev, [msg.data.table_id]: (prev[msg.data.table_id] || 0) + 1 }))
       } else if (msg.type === 'UPDATE_ORDER') {
         if (msg.data.status === 'completed') {
-          // Decrement count, mark available if 0
           setActiveOrders(prev => {
             const next = { ...prev }
             next[msg.data.table_id] = Math.max(0, (next[msg.data.table_id] || 1) - 1)
+            // Only mark table available when no active orders remain
             if (next[msg.data.table_id] === 0) {
-              setTables(t => t.map(tb => tb.id === msg.data.table_id ? { ...tb, status: 'available' } : tb))
+              setTables(t => t.map(tb =>
+                tb.id === msg.data.table_id ? { ...tb, status: 'available' } : tb
+              ))
             }
             return next
           })

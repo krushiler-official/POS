@@ -19,7 +19,10 @@ export default function AdminStaff() {
 
   const fetchUsers = () => {
     setLoading(true)
-    api.get('/analytics/staff').then(r => { setUsers(r.data); setLoading(false) })
+    api.get('/analytics/staff')
+      .then(r => { setUsers(r.data) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }
   useEffect(() => { fetchUsers() }, [])
 

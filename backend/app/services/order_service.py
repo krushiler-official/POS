@@ -22,7 +22,7 @@ async def create_order_with_items(db, data: OrderCreate, staff_id: str) -> dict:
     result = await db.orders.insert_one({
         "table_id": data.table_id,
         "staff_id": staff_id,
-        "status": "pending",
+        "status": "preparing",
         "payment_status": "paid",
         "payment_method": data.payment_method,
         "total_amount": round(total, 2),

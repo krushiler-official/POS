@@ -6,8 +6,9 @@ const titles = {
   '/admin/dashboard': 'Dashboard',
   '/admin/tables': 'Table Management',
   '/admin/products': 'Product Management',
-  '/admin/orders': 'Order Monitoring',
+  '/admin/orders':   'Order Monitoring',
   '/admin/analytics': 'Analytics',
+  '/admin/staff':     'Staff Management',
 }
 
 export default function AdminNavbar() {

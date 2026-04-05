@@ -49,8 +49,16 @@ async def update_order_status(order_id: str, data: OrderStatusUpdate, _=Depends(
     if not result:
         raise HTTPException(status_code=404, detail="Order not found")
     order = doc(result)
-    # When completed, free the table
+    # Free the table only when NO other active orders remain for this table
     if data.status == "completed":
-        await db.tables.update_one({"_id": to_oid(order["table_id"])}, {"$set": {"status": "available"}})
+        still_active = await db.orders.count_documents({
+            "table_id": order["table_id"],
+            "status": "preparing",
+        })
+        if still_active == 0:
+            await db.tables.update_one(
+                {"_id": to_oid(order["table_id"])},
+                {"$set": {"status": "available"}}
+            )
     await manager.broadcast("UPDATE_ORDER", _serialize(order))
     return order

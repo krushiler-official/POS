@@ -12,7 +12,7 @@ router = APIRouter(prefix="/kitchen", tags=["kitchen"])
 async def get_kitchen_orders(_=Depends(get_current_user)):
     db = get_database()
     orders = await db.orders.find(
-        {"status": {"$in": [OrderStatus.pending, OrderStatus.preparing]}}
+        {"status": OrderStatus.preparing}
     ).sort("created_at", 1).to_list(None)
     return [doc(o) for o in orders]
 
@@ -25,7 +25,6 @@ async def get_dashboard(_=Depends(get_current_user)):
     return {
         "total_orders": total_orders,
         "total_revenue": total_revenue,
-        "pending": await db.orders.count_documents({"status": OrderStatus.pending}),
         "preparing": await db.orders.count_documents({"status": OrderStatus.preparing}),
         "completed": await db.orders.count_documents({"status": OrderStatus.completed}),
     }

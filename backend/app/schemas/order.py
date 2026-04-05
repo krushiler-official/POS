@@ -1,5 +1,5 @@
 from pydantic import BaseModel, field_validator
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from app.models.order import OrderStatus, PaymentStatus, PaymentMethod
 from app.schemas.order_item import OrderItemCreate, OrderItemOut
@@ -20,12 +20,14 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 class OrderOut(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: str
     table_id: str
     staff_id: str
-    status: OrderStatus
-    payment_status: PaymentStatus
-    payment_method: PaymentMethod
+    status: str                          # str not enum — handles legacy paid/pending values
+    payment_status: Optional[str] = "paid"
+    payment_method: Optional[str] = None
     total_amount: float
     created_at: datetime
     items: List[OrderItemOut]

@@ -8,8 +8,9 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 
 // Display screens (public)
-import KitchenDisplay from './pages/KitchenDisplay'
 import CustomerDisplay from './pages/CustomerDisplay'
+import StaffDisplay from './pages/StaffDisplay'
+import TableMenu from './pages/TableMenu'
 
 // Admin
 import AdminLayout from './components/admin/AdminLayout'
@@ -24,7 +25,7 @@ import AdminStaff from './pages/admin/AdminStaff'
 import StaffLayout from './components/staff/StaffLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 import StaffOrder from './pages/staff/StaffOrder'
-import StaffKitchen from './pages/staff/StaffKitchen'
+import StaffPaymentHistory from './pages/staff/StaffPaymentHistory'
 
 function RoleRouter() {
   const { user } = useAuth()
@@ -63,8 +64,9 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/display/kitchen" element={<KitchenDisplay />} />
             <Route path="/display/customer" element={<CustomerDisplay />} />
+            <Route path="/display/staff" element={<StaffDisplay />} />
+            <Route path="/menu/:tableId" element={<TableMenu />} />
             <Route path="/" element={<RoleRouter />} />
 
             {/* Admin routes */}
@@ -81,7 +83,7 @@ export default function App() {
             <Route element={<StaffGuard />}>
               <Route path="/staff/tables" element={<StaffDashboard />} />
               <Route path="/staff/order" element={<StaffOrder />} />
-              <Route path="/staff/kitchen" element={<StaffKitchen />} />
+              <Route path="/staff/payments" element={<StaffPaymentHistory />} />
             </Route>
 
             <Route path="*" element={<RoleRouter />} />
